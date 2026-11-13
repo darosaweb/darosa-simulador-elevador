@@ -45,6 +45,58 @@
     });
   };
 
+  // DESCRIÇÃO DO ZELADOR (2 funcionários, elevador travado o tempo todo)
+  // As lixeiras não saem do andar; só os sacos descem pelo elevador.
+  // Em cada andar, de cima para baixo, os dois dividem as lixeiras e cada um faz, para as suas:
+  // tira o saco, põe o saco no elevador, limpa a lixeira e põe saco novo. Depois seguem juntos.
+  // Quando o elevador enche de sacos, descem e descarregam na casa de lixo.
+  // Não há limpeza separada do quarto: a limpeza desta rotina é a das lixeiras.
+  M.zelador = function (s) {
+    const L = s.L, desc = s.andares.slice().reverse(), casa = s.e.niveis[s.central];
+    const porViagem = Math.max(1, Math.floor(s.p.capacidadeSacos / L));
+    const parte = [Math.ceil(L / 2), Math.floor(L / 2)];   // lixeiras de cada um por andar
+    const grupos = [];
+    for (let i = 0; i < desc.length; i += porViagem) grupos.push(desc.slice(i, i + porViagem));
+    const pronto = (a) => { const x = s.e.niveis[a]; return !x.cheias && !x.sujas && !x.sacos; };
+    let colega = null;
+
+    function* fazerAndar(f, quantas) {
+      for (let k = 0; k < quantas; k++) { yield* f.ensacar(1); yield* f.carregarSacos(1); yield* f.limparLixeira(1); }
+    }
+
+    s.ator('Funcionário 1', function* (f) {
+      let entregues = 0;
+      f.fase('Recolhimento em sacos');
+      yield* f.chamar();
+      f.travar();
+      for (const g of grupos) {
+        for (const a of g) {
+          yield* f.viajar(a, [colega]);
+          yield* fazerAndar(f, parte[0]);
+          yield* f.aguardar(() => pronto(a), 'Aguardando o colega terminar o andar');
+        }
+        yield* f.viajar(s.central, [colega]);
+        const n = g.length * L;
+        entregues += n;
+        yield* f.descarregarSacos(Math.ceil(n / 2));
+        yield* f.aguardar(() => casa.sacos === entregues, 'Aguardando o colega descarregar');
+      }
+      f.liberar();
+    });
+
+    colega = s.ator('Funcionário 2', function* (f) {
+      f.fase('Recolhimento em sacos');
+      for (const g of grupos) {
+        for (const a of g) {
+          yield* f.aguardar(() => f.nivel === a, 'No elevador com o colega');
+          yield* fazerAndar(f, parte[1]);
+        }
+        yield* f.aguardar(() => f.nivel === s.central, 'No elevador com o colega');
+        yield* f.descarregarSacos(Math.floor(g.length * L / 2));
+      }
+    });
+  };
+
   // TROCA DIRETA
   // Um jogo reserva de lixeiras limpas (um elevador cheio) sobe; em cada andar troca
   // as cheias pelas limpas e já limpa o quarto. Uma passada só. O elevador fica livre
@@ -255,6 +307,8 @@
   E.cenasPadrao = [
     { id: 'atual', nome: 'Cena atual', metodo: 'atual',
       descricao: 'Uma pessoa. Elevador travado na coleta, de cima para baixo, enchendo o elevador a cada viagem. Depois de esvaziar as lixeiras, elevador travado de novo para devolver e limpar andar por andar.' },
+    { id: 'zelador', nome: 'Descrição do zelador', metodo: 'zelador',
+      descricao: '2 funcionários, elevador travado o tempo todo. Em cada andar eles tiram os sacos das lixeiras, põem os sacos no elevador, limpam as lixeiras e põem saco novo; as lixeiras não saem do andar. Só os sacos descem.' },
     { id: 'troca', nome: 'Troca direta com jogo reserva', metodo: 'trocaDireta',
       descricao: 'Uma pessoa e um elevador cheio de lixeiras reserva. Sobe com limpas, troca pelas cheias e limpa o quarto na mesma parada. Uma passada só; elevador livre enquanto esvazia na casa de lixo.' },
     { id: 'equipe', nome: 'Troca direta com jogo reserva em equipe', metodo: 'trocaDiretaEquipe',

@@ -149,3 +149,41 @@ test('todas as cenas rodam em edifícios bem diferentes do exemplo', () => {
     }
   }
 });
+
+test('zelador: dois funcionários, elevador travado do começo ao fim, só os sacos descem', () => {
+  const r = rodar('zelador'), m = r.metricas, p = r.p;
+  assert.ok(!r.erro, r.erro);
+  assert.equal(m.pessoas, 2);
+  assert.equal(m.lixeirasReserva, 0);
+  assert.equal(m.semLixeira, 0);
+  assert.equal(m.bloqueios.length, 1);
+  assert.ok(Math.abs(m.travado - m.duracao) < 120); // só a espera inicial pelo elevador fica de fora
+  // 36 sacos, 20 por viagem (10 andares, segundo o zelador): uma viagem de 10 andares e outra de 8, mais as voltas
+  assert.equal(m.viagens, 11 + 9);
+  assert.equal(r.final.niveis[r.central].sacos, 36);
+  for (const k of r.marcos) assert.ok(k.e.elev.sacos <= 20 && k.e.elev.cheias + k.e.elev.limpas === 0);
+  // cada lixeira: tirar o saco, carregar, limpar; descarregar no subsolo. Não há limpeza de quarto.
+  assert.ok(Math.abs(m.porTipo.ensacar - 36 * p.tEnsacar) < 1e-6);
+  assert.ok(Math.abs(m.porTipo.limparLixeira - 36 * p.tLimparLixeira) < 1e-6);
+  assert.ok(Math.abs(m.porTipo.carga - 36 * p.tCarregarSaco) < 1e-6);
+  assert.ok(Math.abs(m.porTipo.descarga - 36 * p.tDescarregarSaco) < 1e-6);
+  assert.ok(!m.porTipo.limpeza);
+  // os dois trabalham ao mesmo tempo e ninguém viaja enquanto o colega ainda trabalha no andar
+  const [f1, f2] = r.atores.map((a) => a.segs);
+  const trabalho = (x) => ['ensacar', 'carga', 'descarga', 'limparLixeira'].includes(x.tipo);
+  for (const v of f1.filter((x) => x.tipo === 'viagem')) assert.ok(!f2.some((x) => trabalho(x) && x.t0 < v.t1 - 1e-6 && x.t1 > v.t0 + 1e-6));
+  assert.ok(f2.filter(trabalho).length === f1.filter(trabalho).length);
+  // lixeiras ímpares e prédio pequeno também fecham
+  for (const ed of [{ andares: 5, lixeirasPorAndar: 3 }, { andares: 2, lixeirasPorAndar: 1 }]) {
+    const x = E.simular(E.normalizarProjeto({ edificio: ed }), cena('zelador'));
+    assert.ok(!x.erro, JSON.stringify(ed) + ': ' + x.erro);
+  }
+});
+
+test('linha base: padrão é a primeira cena visível, aceita outra e volta ao padrão se ela for ocultada', () => {
+  assert.equal(E.novoProjeto('X').cenaBase, 'atual');
+  assert.equal(E.normalizarProjeto({ cenaBase: 'zelador' }).cenaBase, 'zelador');
+  assert.equal(E.normalizarProjeto({ cenaBase: 'nao-existe' }).cenaBase, 'atual');
+  assert.equal(E.normalizarProjeto({ cenaBase: 'zelador', cenasOcultas: ['zelador', 'atual'] }).cenaBase, 'troca');
+  assert.equal(E.importarProjetos(E.exportarProjetos([E.normalizarProjeto({ cenaBase: 'dupla' })]))[0].cenaBase, 'dupla');
+});

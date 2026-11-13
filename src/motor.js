@@ -20,6 +20,11 @@
     { id: 'tLevarPorta', rotulo: 'Levar uma lixeira entre o quarto e a porta do elevador', un: 's', padrao: 10, passo: 1 },
     { id: 'tCarregarPorta', rotulo: 'Pôr no elevador uma lixeira que já está na porta', un: 's', padrao: 6, passo: 1 },
     { id: 'tDescarregarPorta', rotulo: 'Tirar uma lixeira e deixar na porta', un: 's', padrao: 5, passo: 1 },
+    { id: 'capacidadeSacos', rotulo: 'Sacos de lixo que cabem no elevador', un: 'un', padrao: 20, passo: 1 },
+    { id: 'tEnsacar', rotulo: 'Tirar e fechar o saco de uma lixeira', un: 's', padrao: 20, passo: 5 },
+    { id: 'tLimparLixeira', rotulo: 'Limpar uma lixeira e pôr saco novo', un: 's', padrao: 60, passo: 5 },
+    { id: 'tCarregarSaco', rotulo: 'Pôr um saco no elevador', un: 's', padrao: 8, passo: 1 },
+    { id: 'tDescarregarSaco', rotulo: 'Tirar um saco do elevador', un: 's', padrao: 5, passo: 1 },
     { id: 'usoMoradores', rotulo: 'Uso pelos moradores (viagens por hora)', un: '/h', padrao: 12, passo: 1, zero: true },
     { id: 'tMorador', rotulo: 'Embarque e desembarque de um morador', un: 's', padrao: 10, passo: 1 },
     { id: 'semente', rotulo: 'Sorteio dos moradores (semente)', un: 'nº', padrao: 1, passo: 1 },
@@ -71,7 +76,7 @@
 
     liberar() {
       const el = this.s.e.elev;
-      if (el.cheias + el.limpas > 0) throw new Error('Não dá para liberar o elevador com lixeiras dentro');
+      if (el.cheias + el.limpas + el.sacos > 0) throw new Error('Não dá para liberar o elevador com lixeiras ou sacos dentro');
       el.travado = false; el.reservado = false;
       this.s._marco();
     }
@@ -159,6 +164,62 @@
       }
     }
 
+    /** Tira e fecha o saco de n lixeiras cheias, no próprio andar. A lixeira fica no quarto, vazia e suja; o saco fica ao lado. */
+    *ensacar(n) {
+      const s = this.s;
+      for (let i = 0; i < n; i++) {
+        const nv = this.nivel, x = s.e.niveis[nv];
+        if (x.cheias < 1) throw new Error('Não há lixeira cheia no ' + s._nome(nv));
+        yield {
+          tipo: 'ensacar', dur: s.p.tEnsacar, binTipo: 'saco', texto: 'Tirando o saco de uma lixeira (' + s._nome(nv) + ')',
+          inicio: () => { this.est.onde = 'andar'; }, fim: () => { x.cheias--; x.sujas++; x.sacos++; },
+        };
+      }
+    }
+
+    /** Limpa n lixeiras vazias e põe saco novo. Quando todas as do andar estão prontas, o quarto conta como limpo. */
+    *limparLixeira(n) {
+      const s = this.s;
+      for (let i = 0; i < n; i++) {
+        const nv = this.nivel, x = s.e.niveis[nv];
+        if (x.sujas < 1) throw new Error('Não há lixeira vazia para limpar no ' + s._nome(nv));
+        yield {
+          tipo: 'limparLixeira', dur: s.p.tLimparLixeira, texto: 'Limpando lixeira e pondo saco novo (' + s._nome(nv) + ')',
+          inicio: () => { this.est.onde = 'andar'; }, fim: () => { x.sujas--; x.limpas++; if (!x.sujas && !x.cheias) x.limpo = true; },
+        };
+      }
+    }
+
+    /** Põe n sacos do andar dentro do elevador. */
+    *carregarSacos(n) {
+      const s = this.s, e = s.e;
+      for (let i = 0; i < n; i++) {
+        this._juntoAoElevador('carregar sacos');
+        const nv = this.nivel;
+        if (!e.elev.travado) throw new Error('Trave o elevador antes de carregar');
+        if (e.elev.sacos >= s.p.capacidadeSacos) throw new Error('Elevador lotado de sacos no ' + s._nome(nv));
+        if (e.niveis[nv].sacos < 1) throw new Error('Não há saco no ' + s._nome(nv));
+        yield {
+          tipo: 'carga', dur: s.p.tCarregarSaco, binTipo: 'saco', texto: 'Pondo saco no elevador (' + s._nome(nv) + ')',
+          inicio: () => { this.est.onde = 'andar'; e.niveis[nv].sacos--; }, fim: () => { e.elev.sacos++; },
+        };
+      }
+    }
+
+    /** Tira n sacos do elevador e deixa no andar (na casa de lixo, é o destino final). */
+    *descarregarSacos(n) {
+      const s = this.s, e = s.e;
+      for (let i = 0; i < n; i++) {
+        this._juntoAoElevador('descarregar sacos');
+        const nv = this.nivel;
+        if (e.elev.sacos < 1) throw new Error('Não há saco no elevador');
+        yield {
+          tipo: 'descarga', dur: s.p.tDescarregarSaco, binTipo: 'saco', texto: 'Tirando saco do elevador (' + s._nome(nv) + ')',
+          inicio: () => { this.est.onde = 'andar'; e.elev.sacos--; }, fim: () => { e.niveis[nv].sacos++; },
+        };
+      }
+    }
+
     /** Limpa o quarto de lixo do andar onde está. */
     *limpar() {
       const s = this.s, nv = this.nivel;
@@ -206,10 +267,10 @@
       this.andares = this.niveis.map((n, i) => (n.tipo === 'andar' ? i : -1)).filter((i) => i >= 0);
       this.L = this.ed.lixeirasPorAndar;
       this.e = {
-        elev: { nivel: this.central, cheias: 0, limpas: 0, travado: false, reservado: false, ocupado: false, morador: false },
+        elev: { nivel: this.central, cheias: 0, limpas: 0, travado: false, reservado: false, ocupado: false, morador: false, sacos: 0 },
         atores: [],
         espera: [],   // andares onde há morador esperando o elevador
-        niveis: this.niveis.map((n) => ({ cheias: n.tipo === 'andar' ? this.L : 0, limpas: 0, pCheias: 0, pLimpas: 0, limpo: false })),
+        niveis: this.niveis.map((n) => ({ cheias: n.tipo === 'andar' ? this.L : 0, limpas: 0, sujas: 0, pCheias: 0, pLimpas: 0, sacos: 0, limpo: false })),
       };
       this.atores = [];
       this.fila = [];        // pedidos de elevador: moradores e funcionários, por ordem de chegada
@@ -359,8 +420,8 @@
       }
       for (const i of andares) {
         const n = e.niveis[i];
-        if (n.cheias + n.limpas + n.pCheias + n.pLimpas < L) m.semLixeira += d;
-        if (n.cheias + n.pCheias > 0) m.fimColeta = t1;
+        if (n.cheias + n.limpas + n.sujas + n.pCheias + n.pLimpas < L) m.semLixeira += d;
+        if (n.cheias + n.pCheias + n.sacos > 0) m.fimColeta = t1;
       }
     }
     for (const a of sim.atores) {
@@ -394,7 +455,7 @@
       sim.rodar();
       const pend = sim.andares.filter((i) => {
         const n = sim.final.niveis[i];
-        return n.cheias + n.pCheias + n.pLimpas > 0 || n.limpas !== sim.L || !n.limpo;
+        return n.cheias + n.sujas + n.pCheias + n.pLimpas + n.sacos > 0 || n.limpas !== sim.L || !n.limpo;
       });
       if (pend.length) throw new Error('O método terminou sem concluir: ' + pend.map((i) => sim.niveis[i].nome).join(', '));
       return {

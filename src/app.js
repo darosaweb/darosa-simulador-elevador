@@ -59,6 +59,7 @@
   function mostrarProjeto() {
     cenas = E.cenasDoProjeto(projeto);
     if (!cenas.some((c) => c.id === st.cenaId)) st.cenaId = cenas[0].id;
+    if (!cenas.some((c) => c.id === projeto.cenaBase)) projeto.cenaBase = cenas[0].id;
     $('projNome').value = projeto.nome;
     $('projDesc').textContent = E.resumoEdificio(projeto);
     document.title = projeto.nome + ' · daRosa - Simulador de Elevador';
@@ -90,7 +91,7 @@
     const s = Math.floor(hi * 3600 + mi * 60 + t);
     return [Math.floor(s / 3600) % 24, Math.floor(s / 60) % 60, s % 60].map((x) => String(x).padStart(2, '0')).join(':');
   };
-  const NOME_ATIV = { viagem: 'Dentro do elevador', carga: 'Carregando lixeiras', descarga: 'Descarregando', limpeza: 'Limpando quartos', esvaziar: 'Esvaziando e lavando', escada: 'Na escada', espera: 'Esperando o elevador', aguardar: 'Parado, aguardando', levar: 'Levando lixeiras quarto/porta' };
+  const NOME_ATIV = { viagem: 'Dentro do elevador', carga: 'Carregando o elevador', descarga: 'Descarregando o elevador', limpeza: 'Limpando quartos', esvaziar: 'Esvaziando e lavando', escada: 'Na escada', espera: 'Esperando o elevador', aguardar: 'Parado, aguardando', ensacar: 'Tirando sacos das lixeiras', limparLixeira: 'Limpando lixeiras', levar: 'Levando lixeiras quarto/porta' };
 
   // ---------- simulação ----------
   function recalcular() {
@@ -105,7 +106,7 @@
   const cv = $('tela'), g = cv.getContext('2d');
   const W = 570, LIN = 32, TOPO = 14;
   const X = { rot: 52, apt: 60, quarto: 342, hall: 404, poco: 446, esc: 512, fim: 556 };
-  const COR = { texto: '#1f2933', suave: '#8793a0', parede: '#c9d0d8', apto: '#e9edf2', janela: '#f9e9a8', poco: '#eceff3', cheia: '#7a5230', limpa: '#12a3a3', limpaF: '#d5f3f3', travado: '#d9480f', livre: '#2f9e44', func: '#1c6fd1', sujo: '#f5ecdb', limpo: '#dff3e4', morador: '#98a2ad' };
+  const COR = { texto: '#1f2933', suave: '#8793a0', parede: '#c9d0d8', apto: '#e9edf2', janela: '#f9e9a8', poco: '#eceff3', cheia: '#7a5230', limpa: '#12a3a3', limpaF: '#d5f3f3', travado: '#d9480f', livre: '#2f9e44', func: '#1c6fd1', sujo: '#f5ecdb', limpo: '#dff3e4', morador: '#98a2ad', saco: '#3d4248' };
   const CORES_ATOR = ['#1c6fd1', '#9c36b5', '#343a40', '#c2255c'];
   let niveisN = 0;
 
@@ -120,8 +121,15 @@
 
   function lixeira(x, y, tipo, tam) {
     g.lineWidth = 1.5;
+    if (tipo === 'saco') { // saco de lixo: bolinha escura com o nó em cima
+      g.fillStyle = COR.saco; g.strokeStyle = COR.saco;
+      g.beginPath(); g.arc(x + tam / 2, y + tam / 2 + 1, tam / 2 - .5, 0, 7); g.fill();
+      g.beginPath(); g.moveTo(x + tam / 2 - 2, y); g.lineTo(x + tam / 2, y + 2.5); g.lineTo(x + tam / 2 + 2, y); g.stroke();
+      return;
+    }
     if (tipo === 'cheias') { g.fillStyle = COR.cheia; g.strokeStyle = COR.cheia; }
     else if (tipo === 'limpas') { g.fillStyle = COR.limpaF; g.strokeStyle = COR.limpa; }
+    else if (tipo === 'sujas') { g.fillStyle = '#fff'; g.strokeStyle = COR.cheia; }
     else { g.fillStyle = 'transparent'; g.strokeStyle = COR.parede; g.setLineDash([2, 2]); }
     g.fillRect(x, y, tam, tam); g.strokeRect(x + .5, y + .5, tam - 1, tam - 1); g.setLineDash([]);
   }
@@ -156,7 +164,7 @@
       const larg = X.quarto - 8 - X.apt;
       if (i === res.central) {
         g.fillStyle = '#eef1f4'; g.fillRect(X.apt, y + 3, X.hall - 6 - X.apt, LIN - 6);
-        const itens = [].concat(Array(est.cheias).fill('cheias'), Array(est.limpas).fill('limpas'));
+        const itens = [].concat(Array(est.cheias).fill('cheias'), Array(est.limpas).fill('limpas'), Array(est.sacos).fill('saco'));
         const porLinha = Math.max(1, Math.ceil(itens.length / 2)), tam = Math.max(5, Math.min(10, Math.floor((X.hall - 20 - X.apt) / porLinha) - 2));
         itens.forEach((tp, k) => lixeira(X.apt + 6 + (k % porLinha) * (tam + 2), y + 4 + Math.floor(k / porLinha) * (tam + 2), tp, tam));
       } else if (nv.tipo === 'andar') {
@@ -170,8 +178,9 @@
         }
         // quarto de lixo
         g.fillStyle = est.limpo ? COR.limpo : COR.sujo; g.fillRect(X.quarto, y + 3, X.hall - 6 - X.quarto, LIN - 6);
-        const itens = [].concat(Array(est.cheias).fill('cheias'), Array(est.limpas).fill('limpas'));
+        const itens = [].concat(Array(est.cheias).fill('cheias'), Array(est.sujas).fill('sujas'), Array(est.limpas).fill('limpas'));
         while (itens.length < ed.lixeirasPorAndar) itens.push('vazio');
+        for (let k = 0; k < est.sacos; k++) itens.push('saco');
         const tam = Math.min(12, Math.floor((X.hall - 12 - X.quarto) / itens.length) - 2);
         itens.forEach((tp, k) => lixeira(X.quarto + 4 + k * (tam + 3), y + LIN - 6 - tam, tp, tam));
       } else {
@@ -196,8 +205,9 @@
     const yc = yDe(pe) + 3, xc = X.poco + 3, lc = X.esc - X.poco - 10, ac = LIN - 6;
     g.fillStyle = '#fff'; g.fillRect(xc, yc, lc, ac);
     g.strokeStyle = e.elev.travado ? COR.travado : COR.livre; g.lineWidth = 2.5; g.strokeRect(xc, yc, lc, ac);
-    const dentro = [].concat(Array(e.elev.cheias).fill('cheias'), Array(e.elev.limpas).fill('limpas'));
-    const cols = Math.max(3, Math.ceil(p.capacidadeElevador / 2)), tam = Math.min(9, Math.floor(32 / cols) - 1);
+    const dentro = [].concat(Array(e.elev.cheias).fill('cheias'), Array(e.elev.limpas).fill('limpas'), Array(e.elev.sacos).fill('saco'));
+    const cols = e.elev.sacos ? Math.max(3, Math.ceil(p.capacidadeSacos / 3)) : Math.max(3, Math.ceil(p.capacidadeElevador / 2));
+    const tam = e.elev.sacos ? Math.max(4, Math.min(7, Math.floor(38 / cols) - 2)) : Math.min(9, Math.floor(32 / cols) - 1);
     dentro.forEach((tp, k) => lixeira(xc + 4 + (k % cols) * (tam + 2), yc + ac - 4 - tam - Math.floor(k / cols) * (tam + 2), tp, tam));
 
     // moradores
@@ -219,6 +229,8 @@
         if (seg.tipo === 'carga') { xf = xOrigem(seg) + (xCarro - 14 - xOrigem(seg)) * f; leva = seg.binTipo; }
         else if (seg.tipo === 'descarga') { xf = xCarro - 14 + (xOrigem(seg) - xCarro + 14) * f; leva = seg.binTipo; }
         else if (seg.tipo === 'levar') { const k = seg.destino === 'porta' ? f : 1 - f; xf = xQuarto + (xPorta - xQuarto) * k; leva = seg.binTipo; }
+        else if (seg.tipo === 'ensacar') { xf = xQuarto - 8 + i * 14 + Math.sin(st.t / 4) * 3; leva = 'saco'; }
+        else if (seg.tipo === 'limparLixeira') xf = xQuarto - 8 + i * 14 + Math.sin(st.t / 3) * 3;
         else if (seg.tipo === 'limpeza') xf = X.quarto + 30 + Math.sin(st.t / 4) * 12;
         else if (seg.tipo === 'esvaziar') { xf = xQuarto + Math.sin(st.t / 4) * 5; leva = f < .5 ? 'cheias' : 'limpas'; }
         else if (seg.tipo === 'escada') { xf = (X.esc + X.fim) / 2; nf = seg.de + (seg.para - seg.de) * f; }
@@ -244,11 +256,18 @@
   function montarCenas() {
     $('cenas').innerHTML = '';
     for (const c of cenas) {
-      const b = document.createElement('button');
+      const linha = document.createElement('div'), b = document.createElement('button'), base = document.createElement('button');
+      const ehBase = c.id === projeto.cenaBase;
+      linha.className = 'cenaLinha';
       b.className = 'cena'; b.setAttribute('aria-pressed', c.id === st.cenaId);
       b.innerHTML = '<b></b><span></span>'; b.firstChild.textContent = c.nome; b.lastChild.textContent = c.descricao;
       b.onclick = () => escolher(c.id);
-      $('cenas').appendChild(b);
+      base.className = 'base'; base.setAttribute('aria-pressed', ehBase);
+      base.textContent = ehBase ? '★ Linha base' : '☆ Usar como base';
+      base.title = ehBase ? 'As outras cenas são comparadas com esta' : 'Comparar as outras cenas com esta';
+      base.onclick = () => { if (ehBase) return; projeto.cenaBase = c.id; salvar(); montarCenas(); montarComparacao(); };
+      linha.append(b, base);
+      $('cenas').appendChild(linha);
     }
   }
 
@@ -257,36 +276,61 @@
     montarCenas(); montarComparacao(); montarCena();
   }
 
-  function delta(v, base, el) {
-    if (el === 0 || !base) return '';
+  function delta(v, base, ehBase) {
+    if (ehBase) return '';
+    if (!base) return v ? '<small>—</small>' : '<small>igual</small>';
     const d = Math.round(100 * (v - base) / base);
     if (!d) return '<small>igual</small>';
     return '<small class="' + (d < 0 ? 'bom' : 'ruim') + '">' + (d > 0 ? '+' : '−') + Math.abs(d) + '%</small>';
   }
 
+  // balão de ajuda das colunas: fica fora da tabela para não ser cortado pela rolagem
+  function mostrarAjuda(botao, titulo, texto) {
+    const el = $('balao'), r = botao.getBoundingClientRect();
+    el.innerHTML = '<b></b><span></span><em>A porcentagem embaixo de cada valor compara com a linha base: verde é menor, vermelho é maior.</em>';
+    el.firstChild.textContent = titulo; el.children[1].textContent = texto;
+    el.hidden = false;
+    const larg = el.offsetWidth, alt = el.offsetHeight;
+    el.style.left = Math.max(8, Math.min(window.innerWidth - larg - 8, r.left + r.width / 2 - larg / 2)) + 'px';
+    el.style.top = (r.top - alt - 8 >= 8 ? r.top - alt - 8 : r.bottom + 8) + 'px';
+  }
+  function esconderAjuda() { $('balao').hidden = true; }
+  document.addEventListener('click', esconderAjuda);
+  window.addEventListener('scroll', esconderAjuda, true);
+
   function montarComparacao() {
     const cols = [
-      ['Duração total', (m) => m.duracao, fmtDur],
-      ['Elevador travado', (m) => m.travado, fmtDur],
-      ['Maior bloqueio seguido', (m) => m.maiorBloqueio, fmtDur],
-      ['Pessoas', (m) => m.pessoas, String],
-      ['Trabalho somado', (m) => m.trabalho, fmtDur],
-      ['Lixo fora dos andares em', (m) => m.fimColeta, fmtDur],
-      ['Andar sem lixeira (média)', (m) => m.semLixeira, fmtDur],
-      ['Espera média dos moradores', (m) => m.esperaMedia, fmtDur],
-      ['Maior espera de um morador', (m) => m.esperaMaxima, fmtDur],
-      ['Moradores que esperaram mais de 2 min', (m) => m.moradoresMais2min, (v, m) => v + ' de ' + m.moradores],
+      ['Duração total', (m) => m.duracao, fmtDur,
+        'Tempo do início do recolhimento até a última pessoa terminar a sua parte.'],
+      ['Elevador travado', (m) => m.travado, fmtDur,
+        'Soma de todo o tempo em que o elevador fica reservado para o recolhimento e não atende os moradores.'],
+      ['Maior bloqueio seguido', (m) => m.maiorBloqueio, fmtDur,
+        'O maior período contínuo com o elevador travado. É o pior caso para um morador que chega logo no começo do bloqueio.'],
+      ['Pessoas', (m) => m.pessoas, String,
+        'Quantos funcionários a cena usa.'],
+      ['Trabalho somado', (m) => m.trabalho, fmtDur,
+        'Soma do tempo de todas as pessoas, do começo até cada uma terminar, incluindo as esperas. Duas pessoas ocupadas por 1 hora somam 2 horas. Mostra o custo de mão de obra.'],
+      ['Lixo fora dos andares em', (m) => m.fimColeta, fmtDur,
+        'Tempo, desde o início, até o último andar ficar sem lixo (lixeira cheia ou saco). A partir daí só falta limpar, lavar ou devolver lixeiras.'],
+      ['Andar sem lixeira (média)', (m) => m.semLixeira, fmtDur,
+        'Tempo médio em que um andar fica com menos lixeiras do que o normal, porque elas desceram. Nesse período o morador não tem onde deixar o lixo.'],
+      ['Espera média dos moradores', (m) => m.esperaMedia, fmtDur,
+        'Tempo médio entre o morador chamar o elevador e o elevador chegar, contando os moradores sorteados que chamaram durante a operação. Depende do parâmetro “Uso pelos moradores”.'],
+      ['Maior espera de um morador', (m) => m.esperaMaxima, fmtDur,
+        'A espera do morador que mais esperou pelo elevador durante a operação. Varia bastante de um sorteio para outro (parâmetro “semente”).'],
+      ['Moradores que esperaram mais de 2 min', (m) => m.moradoresMais2min, (v, m) => v + ' de ' + m.moradores,
+        'Quantos moradores esperaram o elevador por mais de 2 minutos, do total que chamou durante a operação. Cenas mais longas recebem mais moradores.'],
     ];
-    const base = st.res[cenas[0].id].metricas;
-    let h = '<thead><tr><th>Cena</th>' + cols.map((c) => '<th>' + c[0] + '</th>').join('') + '</tr></thead><tbody>';
+    const base = (st.res[projeto.cenaBase] || {}).metricas;
+    let h = '<thead><tr><th>Cena</th>' + cols.map((c, k) => '<th>' + c[0] + ' <button class="ajuda" data-k="' + k + '" aria-label="O que é ' + c[0] + '?">?</button></th>').join('') + '</tr></thead><tbody>';
     const escala = Math.max(...cenas.map((c) => st.res[c.id].duracao || 0));
     $('linhas').innerHTML = '';
     cenas.forEach((c, i) => {
       const r = st.res[c.id];
-      h += '<tr data-id="' + c.id + '" class="' + (c.id === st.cenaId ? 'sel' : '') + '"><td>' + c.nome + '</td>';
+      h += '<tr data-id="' + c.id + '" class="' + (c.id === st.cenaId ? 'sel' : '') + '"><td>' + c.nome + (c.id === projeto.cenaBase ? '<small class="selobase">★ linha base</small>' : '') + '</td>';
       if (r.erro) h += '<td colspan="' + cols.length + '" class="erro" style="text-align:left">' + r.erro + '</td>';
       else {
-        for (const col of cols) h += '<td>' + col[2](col[1](r.metricas), r.metricas) + (base ? delta(col[1](r.metricas), col[1](base), i) : '') + '</td>';
+        for (const col of cols) h += '<td>' + col[2](col[1](r.metricas), r.metricas) + (base ? delta(col[1](r.metricas), col[1](base), c.id === projeto.cenaBase) : '') + '</td>';
         const rot = document.createElement('div'); rot.className = 'rot';
         rot.textContent = c.nome + ' · travado ' + Math.round(100 * r.metricas.travado / r.duracao) + '% do tempo' + (r.metricas.lixeirasReserva ? ' · exige ' + r.metricas.lixeirasReserva + ' lixeiras reserva' : '');
         const gt = document.createElement('div'); gt.className = 'gantt';
@@ -295,6 +339,15 @@
       h += '</tr>';
     });
     $('tabela').innerHTML = h + '</tbody>';
+    const cb = cenas.find((c) => c.id === projeto.cenaBase);
+    $('dicaBase').textContent = 'As porcentagens comparam cada cena com a linha base: ' + (cb ? cb.nome : '—') + '. Para trocar, use “☆ Usar como base” na lista de cenas.';
+    $('tabela').querySelectorAll('.ajuda').forEach((b) => {
+      const c = cols[b.dataset.k];
+      const abrir = () => mostrarAjuda(b, c[0], c[3]);
+      b.onmouseenter = abrir; b.onfocus = abrir;
+      b.onmouseleave = b.onblur = esconderAjuda;
+      b.onclick = (ev) => { ev.stopPropagation(); if ($('balao').hidden) abrir(); else esconderAjuda(); };
+    });
     $('tabela').querySelectorAll('tbody tr').forEach((tr) => { tr.onclick = () => escolher(tr.dataset.id); });
   }
 
@@ -478,7 +531,7 @@
   $('cfgFechar').onclick = $('cfgCancelar').onclick = () => $('dlgCfg').close();
   $('cfgForm').onsubmit = () => {
     const novo = E.normalizarProjeto({
-      id: projeto.id, parametros: projeto.parametros,
+      id: projeto.id, parametros: projeto.parametros, cenaBase: projeto.cenaBase,
       nome: E.nomeUnico($('cNome').value.trim() || projeto.nome, nomes(projeto.id)), horaInicio: $('cHora').value,
       edificio: edDoForm(),
       cenasOcultas: [...$('cCenas').querySelectorAll('input')].filter((i) => !i.checked).map((i) => i.value),

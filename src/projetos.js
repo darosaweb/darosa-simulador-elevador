@@ -41,6 +41,9 @@
     const ids = E.cenasPadrao.map((c) => c.id);
     let ocultas = (Array.isArray(p.cenasOcultas) ? p.cenasOcultas : []).filter((id) => ids.includes(id));
     if (ocultas.length >= ids.length) ocultas = [];
+    // linha base: a cena contra a qual as outras são comparadas (precisa estar entre as visíveis)
+    const visiveis = ids.filter((id) => !ocultas.includes(id));
+    const cenaBase = visiveis.includes(p.cenaBase) ? p.cenaBase : visiveis[0];
     return {
       id: typeof p.id === 'string' && p.id ? p.id : E.novoId(),
       nome: String(p.nome || 'Projeto sem nome').trim().slice(0, 80) || 'Projeto sem nome',
@@ -48,6 +51,7 @@
       edificio: ed,
       parametros,
       cenasOcultas: ocultas,
+      cenaBase,
       atualizado: Number(p.atualizado) || Date.now(),
     };
   };
@@ -55,7 +59,7 @@
   /** Níveis onde a casa de lixo pode ficar (subsolos e térreo). */
   E.niveisDaCasaDeLixo = (ed) => E.criarNiveis(ed).filter((n) => n.tipo !== 'andar');
 
-  /** Cenas que o projeto compara. A primeira é a base das porcentagens. */
+  /** Cenas que o projeto compara. A linha base das porcentagens é projeto.cenaBase. */
   E.cenasDoProjeto = (p) => E.cenasPadrao.filter((c) => !(p.cenasOcultas || []).includes(c.id));
 
   E.resumoEdificio = function (p) {
