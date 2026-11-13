@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>daRosa - Simulador de Elevador</title>
+<link rel="icon" type="image/png" href="assets/brand/icone-32.png">
+<style>
+  :root {
+    --fundo: #f4f5f7; --cartao: #ffffff; --borda: #dfe3e8; --texto: #1f2933; --suave: #66727f;
+    --acento: #CC3467; --tinta: #231F20; --travado: #d9480f; --livre: #2f9e44; --cheia: #7a5230; --limpa: #12a3a3;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fundo); color: var(--texto); font: 14px/1.45 Inter, "Segoe UI", system-ui, sans-serif; }
+  header { padding: 12px 20px 6px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; }
+  h1 { font-size: 22px; margin: 0; font-weight: 400; color: var(--tinta); display: flex; align-items: center; gap: 10px; }
+  h1 img { width: 44px; height: 44px; }
+  h1 b { font-weight: 800; color: var(--acento); }
+  .barra { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .barra label { display: flex; align-items: center; gap: 6px; color: var(--suave); }
+  button.b, .barra button, dialog button { font: inherit; padding: 6px 12px; border: 1px solid var(--borda); border-radius: 6px; background: #fff; color: var(--texto); cursor: pointer; }
+  .barra input, dialog input, dialog select { font: inherit; padding: 6px 8px; border: 1px solid var(--borda); border-radius: 6px; background: #fff; color: var(--texto); }
+  .barra input { width: 220px; font-weight: 600; }
+  .salvo { font-size: 12px; color: var(--livre); } .salvo.falha { color: var(--travado); font-weight: 600; }
+  header p { flex-basis: 100%; }
+  dialog { border: 1px solid var(--borda); border-radius: 12px; padding: 0; width: min(640px, calc(100vw - 32px)); color: var(--texto); box-shadow: 0 20px 60px rgba(0,0,0,.25); }
+  dialog::backdrop { background: rgba(35,31,32,.45); }
+  .dlg-cab, .dlg-pe { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 16px; }
+  .dlg-cab { border-bottom: 1px solid var(--borda); } .dlg-pe { border-top: 1px solid var(--borda); }
+  .dlg-cab h3 { margin: 0; font-size: 16px; } .dlg-cab span { color: var(--suave); font-size: 12px; }
+  .esp { flex: 1; }
+  dialog button.primario { background: var(--acento); border-color: var(--acento); color: #fff; }
+  .plista { max-height: 50vh; overflow: auto; padding: 8px 16px; display: grid; gap: 8px; }
+  .plista > div { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; border: 1px solid var(--borda); border-radius: 8px; padding: 8px 10px; }
+  .plista > div.atual { border-color: var(--acento); background: #fff3f5; }
+  .plista .info { flex: 1 1 200px; min-width: 0; } .plista .info b { display: block; } .plista .info span { color: var(--suave); font-size: 12px; }
+  .plista button { padding: 4px 9px; font-size: 13px; }
+  .cfg { padding: 14px 16px; display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px 18px; max-height: 62vh; overflow: auto; }
+  .cfg label { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13px; }
+  .cfg label.largo, .cfg fieldset { grid-column: 1 / -1; }
+  .cfg input[type=number] { width: 80px; text-align: right; } .cfg label.largo input { flex: 1; }
+  .cfg fieldset { border: 1px solid var(--borda); border-radius: 8px; padding: 8px 12px; display: grid; gap: 4px; }
+  .cfg fieldset label { justify-content: flex-start; } .cfg legend { color: var(--suave); font-size: 12px; padding: 0 4px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--suave); margin: 0 0 10px; }
+  header p { margin: 0; color: var(--suave); flex: 1 1 300px; }
+  main { display: grid; grid-template-columns: minmax(0, 520px) minmax(0, 1fr); gap: 16px; padding: 10px 20px 30px; align-items: start; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; padding: 10px 16px 30px; } }
+  .cartao { background: var(--cartao); border: 1px solid var(--borda); border-radius: 10px; padding: 14px; }
+  .palco { position: sticky; top: 10px; }
+  @media (max-width: 900px) { .palco { position: static; } }
+  canvas { width: 100%; height: auto; display: block; }
+  .legenda { display: flex; flex-wrap: wrap; gap: 4px 14px; color: var(--suave); font-size: 12px; margin-top: 8px; }
+  .legenda i { display: inline-block; width: 11px; height: 11px; border-radius: 2px; vertical-align: -1px; margin-right: 5px; border: 2px solid; }
+  .coluna { display: grid; gap: 16px; min-width: 0; grid-template-columns: minmax(0, 1fr); }
+
+  .cenas { display: grid; gap: 8px; }
+  .cena { text-align: left; font: inherit; color: inherit; background: var(--cartao); border: 1px solid var(--borda); border-radius: 8px; padding: 9px 12px; cursor: pointer; }
+  .cena b { display: block; }
+  .cena span { color: var(--suave); font-size: 13px; }
+  .cena[aria-pressed=true] { border-color: var(--acento); box-shadow: inset 3px 0 0 var(--acento); background: #fff3f5; }
+
+  .player { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+  .player button, .player select, .params button { font: inherit; padding: 6px 12px; border: 1px solid var(--borda); border-radius: 6px; background: #fff; cursor: pointer; }
+  .player button.primario { background: var(--acento); color: #fff; border-color: var(--acento); min-width: 92px; }
+  .relogio { font-variant-numeric: tabular-nums; font-size: 20px; font-weight: 600; margin-left: auto; }
+  .estado { display: flex; gap: 10px; align-items: center; margin: 10px 0 6px; min-height: 24px; }
+  .acoes { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 3px; }
+  .acoes li { display: grid; grid-template-columns: 12px 100px 1fr; gap: 6px; align-items: baseline; }
+  .acoes i { width: 10px; height: 10px; border-radius: 50%; }
+  .acoes span { color: var(--suave); }
+  .selo { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 99px; color: #fff; white-space: nowrap; }
+  .selo.travado { background: var(--travado); } .selo.livre { background: var(--livre); }
+  input[type=range] { width: 100%; margin: 4px 0 0; }
+  .gantt { position: relative; height: 12px; background: #d8f0dd; border-radius: 3px; overflow: hidden; }
+  .gantt span { position: absolute; top: 0; bottom: 0; background: var(--travado); }
+  .gantt em { position: absolute; top: 0; bottom: 0; width: 2px; background: #111; margin-left: -1px; }
+  .dica { color: var(--suave); font-size: 12px; margin: 6px 0 0; }
+
+  .rolagem { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+  th, td { text-align: right; padding: 6px 8px; border-bottom: 1px solid var(--borda); white-space: nowrap; }
+  th { font-size: 12px; color: var(--suave); font-weight: 600; white-space: normal; vertical-align: bottom; }
+  th:first-child, td:first-child { text-align: left; white-space: normal; min-width: 130px; }
+  tr.sel td { background: #fff3f5; }
+  tbody tr { cursor: pointer; }
+  small.bom { color: var(--livre); } small.ruim { color: var(--travado); } td small { display: block; font-size: 11px; color: var(--suave); }
+  .linhas { display: grid; gap: 6px; margin-top: 14px; }
+  .linhas div.rot { font-size: 12px; color: var(--suave); }
+  .ativ { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 4px 16px; margin: 12px 0 0; padding: 0; list-style: none; font-size: 13px; }
+  .ativ li { display: flex; justify-content: space-between; gap: 10px; border-bottom: 1px dotted var(--borda); }
+
+  .params { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 8px 16px; }
+  .params label { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13px; }
+  .params input { width: 70px; font: inherit; padding: 3px 6px; border: 1px solid var(--borda); border-radius: 5px; text-align: right; }
+  .params .un { color: var(--suave); width: 28px; }
+  .erro { color: var(--travado); font-weight: 600; }
+</style>
+</head>
+<body>
+<header>
+  <h1><img src="assets/brand/rosa-original-transparente.png" alt=""><span>daRosa <b>Simulador de Elevador</b></span></h1>
+  <div class="barra">
+    <button id="btLib">📁 Meus projetos</button>
+    <label>Projeto <input id="projNome" maxlength="80" aria-label="Nome do projeto"></label>
+    <button id="btCfg">⚙ Configurar edifício</button>
+    <button id="btExportar">Exportar</button>
+    <span class="salvo" id="salvo">Salvo ✓</span>
+  </div>
+  <p id="projDesc"></p>
+</header>
+<main>
+  <section class="cartao palco">
+    <canvas id="tela"></canvas>
+    <div class="legenda">
+      <span><i style="background:var(--cheia);border-color:var(--cheia)"></i>lixeira cheia</span>
+      <span><i style="background:#d5f3f3;border-color:var(--limpa)"></i>lixeira limpa</span>
+      <span><i style="background:#fff;border-color:var(--travado)"></i>elevador travado</span>
+      <span><i style="background:#fff;border-color:var(--livre)"></i>elevador livre para moradores</span>
+      <span><i style="background:#dff3e4;border-color:#b9dfc3"></i>quarto de lixo limpo</span>
+      <span><i style="background:#98a2ad;border-color:#98a2ad;border-radius:50%"></i>morador esperando ou usando o elevador</span>
+    </div>
+  </section>
+
+  <div class="coluna">
+    <section class="cartao">
+      <h2>Cenas</h2>
+      <div class="cenas" id="cenas"></div>
+    </section>
+
+    <section class="cartao">
+      <h2>Parâmetros (suposições até medir no prédio)</h2>
+      <div class="params" id="params"></div>
+      <p class="dica">Alterar um valor recalcula todas as cenas. <button id="btPadrao" style="font:inherit;border:0;background:none;color:var(--acento);cursor:pointer;padding:0">Restaurar padrões</button></p>
+    </section>
+
+    <section class="cartao">
+      <div class="player">
+        <button class="primario" id="btTocar">▶ Iniciar</button>
+        <button id="btReiniciar" title="Voltar ao início">⏮</button>
+        <label>Velocidade
+          <select id="selVel">
+            <option value="1">1× (tempo real)</option><option value="10">10×</option><option value="30">30×</option>
+            <option value="60" selected>60×</option><option value="120">120×</option><option value="300">300×</option>
+          </select>
+        </label>
+        <span class="relogio" id="relogio">08:00:00</span>
+      </div>
+      <div class="estado"><span class="selo livre" id="selo">Elevador livre</span></div>
+      <ul class="acoes" id="acao"></ul>
+      <div class="gantt" id="ganttCena"></div>
+      <input type="range" id="tempo" min="0" max="100" step="1" value="0" aria-label="Posição no tempo">
+      <p class="dica" id="fase"></p>
+    </section>
+
+    <section class="cartao">
+      <h2>Comparação das cenas</h2>
+      <div class="rolagem"><table id="tabela"></table></div>
+      <div class="linhas" id="linhas"></div>
+      <p class="dica">Barras: vermelho = elevador travado para o recolhimento; verde = livre para os moradores. Mesma escala de tempo em todas. Trabalho somado = tempo de todas as pessoas, incluindo esperas. Os moradores são sorteados uma vez e são os mesmos em todas as cenas.</p>
+      <ul class="ativ" id="ativ"></ul>
+    </section>
+  </div>
+</main>
+<script src="src/motor.js"></script>
+<dialog id="dlgLib">
+  <div class="dlg-cab"><h3>Meus projetos</h3><span>Salvos automaticamente neste navegador</span><span class="esp"></span><button id="libFechar" aria-label="Fechar">✕</button></div>
+  <div class="plista" id="libLista"></div>
+  <div class="dlg-pe">
+    <button class="primario" id="libNovo">+ Novo projeto</button><span class="esp"></span>
+    <button id="libImportar">Importar .json</button><button id="libBackup">Baixar backup de todos</button>
+    <input type="file" id="libArquivo" accept=".json,application/json" hidden>
+  </div>
+</dialog>
+
+<dialog id="dlgCfg">
+  <form method="dialog" id="cfgForm">
+    <div class="dlg-cab"><h3>Configurar edifício</h3><span class="esp"></span><button type="button" id="cfgFechar" aria-label="Fechar">✕</button></div>
+    <div class="cfg">
+      <label class="largo">Nome do projeto <input id="cNome" maxlength="80" required></label>
+      <label>Andares com apartamentos <input type="number" id="cAndares" min="1" max="60" step="1" required></label>
+      <label>Apartamentos por andar <input type="number" id="cAptos" min="1" max="12" step="1" required></label>
+      <label>Lixeiras por andar <input type="number" id="cLixeiras" min="1" max="6" step="1" required></label>
+      <label>Litros por lixeira <input type="number" id="cLitros" min="1" max="2000" step="1" required></label>
+      <label>Subsolos <input type="number" id="cSubsolos" min="0" max="3" step="1" required></label>
+      <label>Tem térreo <input type="checkbox" id="cTerreo"></label>
+      <label>Casa de lixo fica no <select id="cCentral"></select></label>
+      <label>Início do recolhimento <input type="time" id="cHora" required></label>
+      <fieldset><legend>Cenas a comparar (a primeira marcada é a base)</legend><div id="cCenas" style="display:grid;gap:4px"></div></fieldset>
+    </div>
+    <div class="dlg-pe"><span class="esp"></span><button type="button" id="cfgCancelar">Cancelar</button><button class="primario" type="submit">Salvar</button></div>
+  </form>
+</dialog>
+<script src="src/metodos.js"></script>
+<script src="src/projetos.js"></script>
+<script src="projetos/le-notre.js"></script>
+<script src="src/app.js"></script>
+</body>
+</html>
